@@ -1,0 +1,208 @@
+## =======================================
+## GLOBAL
+## =======================================
+@BaseUrl = http://127.0.0.1:8000
+
+### ---------------------------------------
+## AUTH
+### ---------------------------------------
+
+### REGISTER
+# @name Register
+POST {{BaseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Tester",
+  "username": "tester",
+  "password": "tester"
+}
+
+### LOGIN
+# @name Login
+POST {{BaseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "tester",
+  "password": "tester"
+}
+
+> {%
+    client.global.set("authToken", response.body.data.authToken);
+%}
+
+
+
+### ---------------------------------------
+## USERS
+### ---------------------------------------
+
+### GET ME
+# @name GetMe
+GET {{BaseUrl}}/users/me
+Authorization: Bearer {{authToken}}
+
+> {%
+    client.global.set("userId", response.body.data.user.id);
+%}
+
+
+
+### ---------------------------------------
+## POSTS
+### ---------------------------------------
+
+### CREATE POST
+# @name CreatePost
+POST {{BaseUrl}}/posts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "title": "Post Pertama",
+  "description": "Isi post pertama",
+  "imageUrl": null
+}
+
+> {%
+    client.global.set("postId", response.body.data.post.id);
+%}
+
+
+
+### GET POSTS (INFINITE SCROLL)
+# @name GetPosts
+GET {{BaseUrl}}/posts/posts?limit=5&offset=0
+Authorization: Bearer {{authToken}}
+
+---
+
+### NEXT PAGE
+# @name GetPostsNext
+GET {{BaseUrl}}/posts/posts?limit=5&offset=5
+Authorization: Bearer {{authToken}}
+
+---
+
+### GET POST BY ID
+# @name GetPostById
+GET {{BaseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+
+---
+
+### UPDATE POST
+# @name UpdatePost
+PUT {{BaseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "title": "Updated",
+  "description": "Sudah diupdate",
+  "imageUrl": null
+}
+
+
+
+### DELETE POST
+# @name DeletePost
+DELETE {{BaseUrl}}/posts/{{postId}}
+Authorization: Bearer {{authToken}}
+
+---
+
+### ---------------------------------------
+## SEARCH + FILTER + INFINITE SCROLL
+### ---------------------------------------
+
+### SEARCH
+# @name SearchPost
+GET {{BaseUrl}}/posts/search?q=post
+Authorization: Bearer {{authToken}}
+
+---
+
+### SEARCH + PAGINATION
+# @name SearchPaging
+GET {{BaseUrl}}/posts/search?q=post&limit=5&offset=0
+Authorization: Bearer {{authToken}}
+
+---
+
+### SORT LATEST
+# @name SortLatest
+GET {{BaseUrl}}/posts/search?sort=latest
+Authorization: Bearer {{authToken}}
+
+---
+
+### SORT BY LIKES (MASIH DUMMY DI REPO KAMU)
+# @name SortLikes
+GET {{BaseUrl}}/posts/search?sort=likes
+Authorization: Bearer {{authToken}}
+
+---
+
+### ---------------------------------------
+## COMMENTS
+### ---------------------------------------
+
+### CREATE COMMENT
+# @name CreateComment
+POST {{BaseUrl}}/comments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "postId": "{{postId}}",
+  "content": "Komentar pertama"
+}
+
+> {%
+    client.global.set("commentId", response.body.data.comment.id);
+%}
+
+
+### GET COMMENTS BY POST
+# @name GetComments
+GET {{BaseUrl}}/comments/post/{{postId}}
+Authorization: Bearer {{authToken}}
+
+---
+
+### UPDATE COMMENT
+# @name UpdateComment
+PUT {{BaseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "content": "Komentar diupdate"
+}
+
+
+
+### DELETE COMMENT
+# @name DeleteComment
+DELETE {{BaseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{authToken}}
+
+
+
+### ---------------------------------------
+## LIKES
+### ---------------------------------------
+
+### TOGGLE LIKE
+# @name ToggleLike
+POST {{BaseUrl}}/likes/toggle/{{postId}}
+Authorization: Bearer {{authToken}}
+
+
+
+### GET LIKE COUNT
+# @name GetLikes
+GET {{BaseUrl}}/likes/post/{{postId}}
+Authorization: Bearer {{authToken}}
