@@ -4,26 +4,151 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import org.delcom.data.*
+import org.delcom.entities.Post
 import org.delcom.helpers.ServiceHelper
 import org.delcom.helpers.ValidatorHelper
 import org.delcom.repositories.IPostRepository
 import org.delcom.repositories.IUserRepository
-import java.util.UUID
-import org.delcom.data.AppException
-import org.delcom.data.DataResponse
-
-
+import org.delcom.repositories.ICommentRepository
+import org.delcom.repositories.ILikeRepository
 
 class PostService(
     private val postRepository: IPostRepository,
-    private val userRepository: IUserRepository
+    private val userRepository: IUserRepository,
+    private val likeRepository: ILikeRepository,
+    private val commentRepository: ICommentRepository
 ) {
 
-    // ===============================
-    // CREATE POST
-    // ===============================
-    suspend fun createPost(call: ApplicationCall) {
+    // ===== LOGIC LAMA (TIDAK DIUBAH) =====
+    suspend fun createPost(
+        userId: String,
+        title: String,
+        description: String,
+        kategori: String,
+        image: String?
+    ): Post {
+        val post = Post(
+            userId = userId,
+            title = title,
+            description = description,
+            kategori = kategori,
+            imageUrl = image
+        )
+        return postRepository.createPost(post)
+    }
 
+    suspend fun getPosts(limit: Int, offset: Long): List<Post> {
+        return postRepository.getPosts(limit, offset)
+    }
+
+    suspend fun getPost(id: String): Post? {
+        return postRepository.getPostById(id)
+    }
+
+    suspend fun updatePost(
+        id: String,
+        title: String,
+        description: String,
+        kategori: String,
+        image: String?
+    ): Boolean {
+        return postRepository.updatePost(id, title, description, kategori, image)
+    }
+
+    suspend fun deletePost(id: String): Boolean {
+        return postRepository.deletePost(id)
+    }
+
+    // ===== HANDLER (SESUAI REFERENSI) =====
+
+    suspend fun getAll(call: ApplicationCall) {
+
+        val user = ServiceHelper.getAuthUser(call, userRepository)
+
+        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+        val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0
+
+        val posts = postRepository.getPosts(limit, offset)
+
+        val postsWithMeta = posts.map { post ->
+
+            val totalLikes = likeRepository.countByPost(post.id)
+            val totalComments = commentRepository.countByPost(post.id)
+            val isLiked = likeRepository.exists(post.id, user.id)
+
+            val author = userRepository.getById(post.userId)?.username ?: "Unknown"
+
+            PostResponse(
+                id = post.id,
+                userId = post.userId,
+                title = post.title,
+                description = post.description,
+                kategori = post.kategori,
+                imageUrl = post.imageUrl,
+                author = author,
+                totalLikes = totalLikes,
+                totalComments = totalComments,
+                isLiked = isLiked,
+                createdAt = post.createdAt.toString()
+            )
+        }
+
+        val hasMore = posts.size == limit
+
+        call.respond(
+            DataResponse(
+                status = "success",
+                message = "Berhasil mengambil data",
+                data = PostsResponse(
+                    posts = postsWithMeta,
+                    limit = limit,
+                    offset = offset,
+                    hasMore = hasMore
+                )
+            )
+        )
+    }
+
+    suspend fun getById(call: ApplicationCall) {
+
+        val user = ServiceHelper.getAuthUser(call, userRepository)
+
+        val id = call.parameters["id"]
+            ?: throw AppException(400, "ID tidak valid")
+
+        val post = postRepository.getPostById(id)
+            ?: throw AppException(404, "Post tidak ditemukan")
+
+        val totalLikes = likeRepository.countByPost(post.id)
+        val totalComments = commentRepository.countByPost(post.id)
+        val isLiked = likeRepository.exists(post.id, user.id)
+
+        val author = userRepository.getById(post.userId)?.username ?: "Unknown"
+
+        val response = PostResponse(
+            id = post.id,
+            userId = post.userId,
+            title = post.title,
+            description = post.description,
+            kategori = post.kategori,
+            imageUrl = post.imageUrl,
+            author = author,
+            totalLikes = totalLikes,
+            totalComments = totalComments,
+            isLiked = isLiked,
+            createdAt = post.createdAt.toString()
+        )
+
+        call.respond(
+            DataResponse(
+                status = "success",
+                message = "Berhasil mengambil data",
+                data = mapOf("post" to response)
+            )
+        )
+    }
+
+    suspend fun post(call: ApplicationCall) {
         val user = ServiceHelper.getAuthUser(call, userRepository)
 
         val request = call.receive<PostRequest>()
@@ -33,327 +158,155 @@ class PostService(
         validator.required("description", "Deskripsi tidak boleh kosong")
         validator.validate()
 
-        val post = postRepository.createPost(
-            request.toEntity(UUID.fromString(user.id)) // UUID aman
+        val post = createPost(
+            user.id,
+            request.title,
+            request.description,
+            request.kategori,
+            request.imageUrl
         )
 
         call.respond(
             DataResponse(
                 status = "success",
-                message = "Post berhasil dibuat",
+                message = "Berhasil menambah data",
                 data = mapOf("post" to post)
             )
         )
     }
 
-    // ===============================
-    // GET ALL
-    // ===============================
-    suspend fun getAll(call: ApplicationCall) {
-
-        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
-        val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0
-
-        val posts = postRepository.getPosts(limit, offset)
-
-        val response = posts.map {
-
-            val likeCount = postRepository.countLikes(it.id)
-            val commentCount = postRepository.countComments(it.id)
-
-            PostResponse(
-                id = it.id,
-                title = it.title,
-                image = it.image,
-                description = it.description,
-                username = it.userId,
-                likeCount = likeCount.toInt(),
-                commentCount = commentCount.toInt(),
-                createdAt = it.createdAt.toString()
-            )
-        }
-
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Berhasil mengambil data post",
-                data = mapOf(
-                    "posts" to response,
-                    "limit" to limit,
-                    "offset" to offset,
-                    "hasMore" to (posts.size == limit)
-                )
-            )
-        )
-    }
-
-    // ===============================
-    // GET BY ID
-    // ===============================
-    suspend fun getById(call: ApplicationCall) {
-
-        val id = call.parameters["id"]
-            ?: throw AppException(400, "ID tidak valid")
-
-        val post = postRepository.getPostById(id)
-            ?: throw AppException(404, "Post tidak ditemukan")
-
-        val likeCount = postRepository.countLikes(post.id)
-        val commentCount = postRepository.countComments(post.id)
-
-        val response = PostResponse(
-            id = post.id,
-            title = post.title,
-            image = post.image,
-            description = post.description,
-            username = post.userId,
-            likeCount = likeCount.toInt(),
-            commentCount = commentCount.toInt(),
-            createdAt = post.createdAt.toString()
-        )
-
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Berhasil mengambil detail post",
-                data = mapOf("post" to response)
-            )
-        )
-    }
-
-    // ===============================
-    // UPDATE
-    // ===============================
-    suspend fun updatePost(call: ApplicationCall) {
-
+    suspend fun put(call: ApplicationCall) {
         val id = call.parameters["id"]
             ?: throw AppException(400, "ID tidak valid")
 
         val request = call.receive<PostRequest>()
 
-        val updated = postRepository.updatePost(
+        val isUpdated = updatePost(
             id,
             request.title,
             request.description,
-            request.image
+            request.kategori,
+            request.imageUrl
         )
 
-        if (!updated) {
+        if (!isUpdated) {
             throw AppException(400, "Gagal update post")
         }
 
         call.respond(
             DataResponse(
                 status = "success",
-                message = "Post berhasil diupdate",
-                data = null
+                message = "Berhasil mengubah data",
+                data = mapOf("message" to "Post berhasil diupdate")
             )
         )
     }
 
-    // ===============================
-    // DELETE
-    // ===============================
     suspend fun delete(call: ApplicationCall) {
-
         val id = call.parameters["id"]
             ?: throw AppException(400, "ID tidak valid")
 
-        val deleted = postRepository.deletePost(id)
+        val isDeleted = deletePost(id)
 
-        if (!deleted) {
+        if (!isDeleted) {
             throw AppException(400, "Gagal delete post")
         }
 
         call.respond(
             DataResponse(
                 status = "success",
-                message = "Post berhasil dihapus",
-                data = null
+                message = "Berhasil menghapus data",
+                data = mapOf("message" to "Post berhasil dihapus")
             )
         )
     }
 
-    // ===============================
-    // SEARCH
-    // ===============================
+    suspend fun getFeed(call: ApplicationCall) {
+        getAll(call) // 🔥 reuse aja
+    }
+
     suspend fun search(call: ApplicationCall) {
 
+        val user = ServiceHelper.getAuthUser(call, userRepository)
+
         val keyword = call.request.queryParameters["q"]
-        val sort = call.request.queryParameters["sort"]
+        val sort = call.request.queryParameters["sort"] ?: "latest"
 
         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
         val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0
 
         val posts = postRepository.searchPosts(keyword, sort, limit, offset)
 
-        val response = posts.map {
+        val postsWithMeta = posts.map { post ->
 
-            val likeCount = postRepository.countLikes(it.id)
-            val commentCount = postRepository.countComments(it.id)
+            val totalLikes = likeRepository.countByPost(post.id)
+            val totalComments = commentRepository.countByPost(post.id)
+            val isLiked = likeRepository.exists(post.id, user.id)
+
+            val author = userRepository.getById(post.userId)?.username ?: "Unknown"
 
             PostResponse(
-                id = it.id,
-                title = it.title,
-                image = it.image,
-                description = it.description,
-                username = it.userId,
-                likeCount = likeCount.toInt(),
-                commentCount = commentCount.toInt(),
-                createdAt = it.createdAt.toString()
+                id = post.id,
+                userId = post.userId,
+                title = post.title,
+                description = post.description,
+                kategori = post.kategori,
+                imageUrl = post.imageUrl,
+                author = author,
+                totalLikes = totalLikes,
+                totalComments = totalComments,
+                isLiked = isLiked,
+                createdAt = post.createdAt.toString()
             )
         }
 
         call.respond(
             DataResponse(
                 status = "success",
-                message = "Berhasil mencari post",
-                data = mapOf("posts" to response)
+                message = "Berhasil mencari data",
+                data = mapOf("posts" to postsWithMeta)
             )
         )
     }
 
-    // ===============================
-    // TOGGLE LIKE
-    // ===============================
-    suspend fun toggleLike(call: ApplicationCall) {
+    suspend fun getImage(call: ApplicationCall) {
+        call.respond("image not implemented")
+    }
+
+    suspend fun getMyPosts(call: ApplicationCall) {
 
         val user = ServiceHelper.getAuthUser(call, userRepository)
 
-        val postId = call.parameters["postId"]
-            ?: throw AppException(400, "Post ID tidak valid")
+        val posts = postRepository.getPostsByUserId(user.id)
 
-        val liked = postRepository.toggleLike(user.id, postId)
+        val responseList = posts.map { post ->
 
-        val likeCount = postRepository.countLikes(postId)
+            val totalLikes = likeRepository.countByPost(post.id)
+            val totalComments = commentRepository.countByPost(post.id)
+            val isLiked = likeRepository.exists(post.id, user.id)
 
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Berhasil toggle like",
-                data = LikeResponse(
-                    postId = postId,
-                    likeCount = likeCount.toInt(),
-                    liked = liked
-                )
-            )
-        )
-    }
+            val author = userRepository.getById(post.userId)?.username ?: "Unknown"
 
-    // ===============================
-    // CREATE COMMENT
-    // ===============================
-    suspend fun createComment(call: ApplicationCall) {
-
-        val user = ServiceHelper.getAuthUser(call, userRepository)
-
-        val request = call.receive<CommentRequest>()
-
-        val validator = ValidatorHelper(request.toMap())
-        validator.required("content", "Komentar tidak boleh kosong")
-        validator.validate()
-
-        val comment = postRepository.createComment(
-            request.toEntity(UUID.fromString(user.id))
-        )
-
-        val response = CommentResponse(
-            id = comment.id,
-            postId = comment.postId,
-            username = comment.userId,
-            content = comment.content,
-            createdAt = comment.createdAt.toString()
-        )
-
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Komentar berhasil dibuat",
-                data = mapOf("comment" to response)
-            )
-        )
-    }
-
-    // ===============================
-// UPDATE COMMENT
-// ===============================
-    suspend fun updateComment(call: ApplicationCall) {
-
-        val id = call.parameters["id"]
-            ?: throw AppException(400, "Comment ID tidak valid")
-
-        val request = call.receive<CommentRequest>()
-
-        val validator = ValidatorHelper(request.toMap())
-        validator.required("content", "Komentar tidak boleh kosong")
-        validator.validate()
-
-        val updated = postRepository.updateComment(
-            id,
-            request.content
-        )
-
-        if (!updated) {
-            throw AppException(404, "Komentar tidak ditemukan")
-        }
-
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Komentar berhasil diupdate",
-                data = null
-            )
-        )
-    }
-
-    // ===============================
-    // GET COMMENTS
-    // ===============================
-    suspend fun getComments(call: ApplicationCall) {
-
-        val postId = call.parameters["postId"]
-            ?: throw AppException(400, "Post ID tidak valid")
-
-        val comments = postRepository.getCommentsByPost(postId)
-
-        val response = comments.map {
-            CommentResponse(
-                id = it.id,
-                postId = it.postId,
-                username = it.userId,
-                content = it.content,
-                createdAt = it.createdAt.toString()
+            PostResponse(
+                id = post.id,
+                userId = post.userId,
+                title = post.title,
+                description = post.description,
+                kategori = post.kategori,
+                imageUrl = post.imageUrl,
+                author = author,
+                totalLikes = totalLikes,
+                totalComments = totalComments,
+                isLiked = isLiked,
+                createdAt = post.createdAt.toString()
             )
         }
 
         call.respond(
             DataResponse(
                 status = "success",
-                message = "Berhasil mengambil komentar",
-                data = mapOf("comments" to response)
-            )
-        )
-    }
-
-    // ===============================
-// DELETE COMMENT
-// ===============================
-    suspend fun deleteComment(call: ApplicationCall) {
-
-        val id = call.parameters["id"]
-            ?: throw AppException(400, "Comment ID tidak valid")
-
-        val deleted = postRepository.deleteComment(id)
-
-        if (!deleted) {
-            throw AppException(404, "Komentar tidak ditemukan")
-        }
-
-        call.respond(
-            DataResponse(
-                status = "success",
-                message = "Komentar berhasil dihapus",
-                data = null
+                message = "Berhasil mengambil my posts",
+                data = mapOf("posts" to responseList)
             )
         )
     }

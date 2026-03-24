@@ -1,19 +1,16 @@
 package org.delcom.repositories
 
-import org.delcom.dao.*
-import org.delcom.entities.Comment
+import org.delcom.dao.PostDAO
 import org.delcom.entities.Post
-import org.delcom.helpers.*
-import org.delcom.tables.*
+import org.delcom.helpers.postDAOToModel
+import org.delcom.helpers.suspendTransaction
+import org.delcom.tables.PostTable
+import org.delcom.tables.UserTable
 import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.*
-import java.util.*
+import org.jetbrains.exposed.sql.or
+import java.util.UUID
 
 class PostRepository : IPostRepository {
-
-    /*
-        POST
-     */
 
     override suspend fun createPost(post: Post): Post = suspendTransaction {
 
@@ -22,7 +19,10 @@ class PostRepository : IPostRepository {
             userId = EntityID(UUID.fromString(post.userId), UserTable)
             title = post.title
             description = post.description
-            image = post.image
+            kategori = post.kategori
+            image = post.imageUrl
+            createdAt = post.createdAt
+            updatedAt = post.updatedAt
 
         }
 
@@ -49,6 +49,7 @@ class PostRepository : IPostRepository {
         id: String,
         title: String,
         description: String,
+        kategori: String,
         image: String?
     ): Boolean = suspendTransaction {
 
@@ -57,6 +58,7 @@ class PostRepository : IPostRepository {
 
         post.title = title
         post.description = description
+        post.kategori = kategori
         post.image = image
 
         true
@@ -72,143 +74,37 @@ class PostRepository : IPostRepository {
         true
     }
 
-
-    /*
-        SEARCH / SORT / FILTER
-     */
-
     override suspend fun searchPosts(
         keyword: String?,
-        sort: String?,
+        sort: String,
         limit: Int,
         offset: Long
     ): List<Post> = suspendTransaction {
 
-        val query = if (!keyword.isNullOrEmpty()) {
-
+        val baseQuery = if (!keyword.isNullOrEmpty()) {
             PostDAO.find {
                 (PostTable.title like "%$keyword%") or
                         (PostTable.description like "%$keyword%")
             }
-
         } else {
             PostDAO.all()
         }
 
         val sorted = when (sort) {
-
-            "oldest" -> query.sortedBy { it.createdAt }
-
-            "title" -> query.sortedBy { it.title }
-
-            else -> query.sortedByDescending { it.createdAt } // latest default
-
+            "likes" -> baseQuery.sortedByDescending { it.id.value } // sementara dummy
+            else -> baseQuery.sortedByDescending { it.createdAt }
         }
 
         sorted
             .drop(offset.toInt())
             .take(limit)
             .map { postDAOToModel(it) }
-
     }
 
-
-    /*
-        COMMENT
-     */
-
-    override suspend fun createComment(comment: Comment): Comment = suspendTransaction {
-
-        val dao = CommentDAO.new {
-
-            postId = EntityID(UUID.fromString(comment.postId), PostTable)
-            userId = EntityID(UUID.fromString(comment.userId), UserTable)
-            content = comment.content
-
-        }
-
-        commentDAOToModel(dao)
-    }
-
-    override suspend fun getCommentsByPost(postId: String): List<Comment> = suspendTransaction {
-
-        CommentDAO.find {
-            CommentTable.postId eq EntityID(UUID.fromString(postId), PostTable)
-        }.map { commentDAOToModel(it) }
-
-    }
-
-    // ===============================
-// UPDATE COMMENT
-// ===============================
-    override suspend fun updateComment(id: String, content: String): Boolean =
-        suspendTransaction {
-
-            val comment = CommentDAO.findById(UUID.fromString(id))
-                ?: return@suspendTransaction false
-
-            comment.content = content
-
-            true
-        }
-
-    override suspend fun deleteComment(id: String): Boolean = suspendTransaction {
-
-        val comment = CommentDAO.findById(UUID.fromString(id))
-            ?: return@suspendTransaction false
-
-        comment.delete()
-
-        true
-    }
-
-    override suspend fun countComments(postId: String): Long = suspendTransaction {
-
-        CommentDAO.find {
-            CommentTable.postId eq EntityID(UUID.fromString(postId), PostTable)
-        }.count()
-
-    }
-
-
-    /*
-        LIKE
-     */
-
-    override suspend fun toggleLike(userId: String, postId: String): Boolean = suspendTransaction {
-
-        val existing = LikeDAO.find {
-
-            (LikeTable.userId eq EntityID(UUID.fromString(userId), UserTable)) and
-                    (LikeTable.postId eq EntityID(UUID.fromString(postId), PostTable))
-
-        }.firstOrNull()
-
-        if (existing != null) {
-
-            existing.delete()
-            false
-
-        } else {
-
-            LikeDAO.new {
-
-                this.userId = EntityID(UUID.fromString(userId), UserTable)
-                this.postId = EntityID(UUID.fromString(postId), PostTable)
-
-            }
-
-            true
-        }
-
-    }
-
-    override suspend fun countLikes(postId: String): Long = suspendTransaction {
-
-        LikeDAO.find {
-            LikeTable.postId eq EntityID(UUID.fromString(postId), PostTable)
-        }.count()
-
+    override suspend fun getPostsByUserId(userId: String): List<Post> = suspendTransaction {
+        PostDAO
+            .find { PostTable.userId eq UUID.fromString(userId) }
+            .map(::postDAOToModel)
     }
 
 }

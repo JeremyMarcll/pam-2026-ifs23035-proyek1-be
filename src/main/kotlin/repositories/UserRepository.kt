@@ -1,10 +1,14 @@
 package org.delcom.repositories
 
 import org.delcom.dao.UserDAO
+import org.delcom.dao.PostDAO
 import org.delcom.entities.User
+import org.delcom.entities.Post
 import org.delcom.helpers.suspendTransaction
 import org.delcom.helpers.userDAOToModel
+import org.delcom.helpers.postDAOToModel
 import org.delcom.tables.UserTable
+import org.delcom.tables.PostTable
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import java.util.*

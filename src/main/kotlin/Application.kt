@@ -17,6 +17,9 @@ import org.delcom.helpers.JWTConstants
 import org.delcom.helpers.configureDatabases
 import org.delcom.module.appModule
 import org.koin.ktor.plugin.Koin
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.datetime.Instant
+import kotlinx.datetime.serializers.InstantIso8601Serializer
 
 fun main(args: Array<String>) {
     val dotenv = dotenv {
@@ -76,6 +79,10 @@ fun Application.module() {
     install(ContentNegotiation) {
         json(
             Json {
+                serializersModule = SerializersModule {
+                    contextual(Instant::class, InstantIso8601Serializer)
+                }
+                ignoreUnknownKeys = true
                 explicitNulls = false
                 prettyPrint = true
                 ignoreUnknownKeys = true

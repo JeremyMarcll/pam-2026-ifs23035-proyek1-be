@@ -13,6 +13,8 @@ import org.delcom.helpers.parseMessageToMap
 import org.delcom.services.AuthService
 import org.delcom.services.UserService
 import org.delcom.services.PostService
+import org.delcom.services.CommentService
+import org.delcom.services.LikeService
 import org.koin.ktor.ext.inject
 
 fun Application.configureRouting() {
@@ -20,11 +22,12 @@ fun Application.configureRouting() {
     val authService: AuthService by inject()
     val userService: UserService by inject()
     val postService: PostService by inject()
+    val commentService: CommentService by inject()
+    val likeService: LikeService by inject()
 
     install(StatusPages) {
 
         exception<AppException> { call, cause ->
-
             val dataMap: Map<String, List<String>> = parseMessageToMap(cause.message)
 
             call.respond(
@@ -38,9 +41,8 @@ fun Application.configureRouting() {
         }
 
         exception<Throwable> { call, cause ->
-
             call.respond(
-                status = HttpStatusCode.InternalServerError,
+                status = HttpStatusCode.fromValue(500),
                 message = ErrorResponse(
                     status = "error",
                     message = cause.message ?: "Unknown error",
@@ -53,25 +55,23 @@ fun Application.configureRouting() {
     routing {
 
         get("/") {
-            call.respondText("API telah berjalan. Dibuat oleh Jeremy Manullang.")
+            call.respondText("Dibuat oleh Bunga Rhiza Sitorus | Delcom Post")
         }
 
-        /*
-        ==============================
-        AUTH
-        ==============================
+        /**
+         * AUTH ROUTES
          */
         route("/auth") {
-
-            post("/register") {
-                authService.postRegister(call)
-            }
 
             post("/login") {
                 authService.postLogin(call)
             }
 
-            post("/refresh") {
+            post("/register") {
+                authService.postRegister(call)
+            }
+
+            post("/refresh-token") {
                 authService.postRefreshToken(call)
             }
 
@@ -80,17 +80,10 @@ fun Application.configureRouting() {
             }
         }
 
-        /*
-        ==============================
-        AUTHENTICATED ROUTES
-        ==============================
-         */
         authenticate(JWTConstants.NAME) {
 
-            /*
-            ==============================
-            USER
-            ==============================
+            /**
+             * USER ROUTES
              */
             route("/users") {
 
@@ -110,79 +103,93 @@ fun Application.configureRouting() {
                     userService.putMyPhoto(call)
                 }
 
-                get("/{id}/photo") {
-                    userService.getPhoto(call)
+                get("/me/posts") {
+                    postService.getMyPosts(call)
                 }
             }
 
-            /*
-            ==============================
-            POSTS
-            ==============================
+            /**
+             * POST ROUTES (FIXED)
              */
             route("/posts") {
 
                 get {
-                    postService.getAll(call)
+                    postService.getAll(call) // ✅ /posts
                 }
 
-                get("/{id}") {
-                    postService.getById(call)
-                }
-
-                post {
-                    postService.createPost(call)
-                }
-
-                put("/{id}") {
-                    postService.updatePost(call)
-                }
-
-                delete("/{id}") {
-                    postService.delete(call)
+                get("/feed") {
+                    postService.getFeed(call)
                 }
 
                 get("/search") {
                     postService.search(call)
                 }
 
-                /*
-                ==============================
-                LIKE
-                ==============================
-                 */
-                post("/{postId}/likes") {
-                    postService.toggleLike(call)
+                post {
+                    postService.post(call)
                 }
 
-                /*
-                ==============================
-                COMMENT
-                ==============================
-                 */
-                get("/{postId}/comments") {
-                    postService.getComments(call)
+                get("/{id}") {
+                    postService.getById(call)
                 }
-
-                post("/{postId}/comments") {
-                    postService.createComment(call)
-                }
-            }
-
-            /*
-            ==============================
-            COMMENT MANAGEMENT
-            ==============================
-             */
-            route("/comments") {
 
                 put("/{id}") {
-                    postService.updateComment(call)
+                    postService.put(call)
                 }
 
                 delete("/{id}") {
-                    postService.deleteComment(call)
+                    postService.delete(call)
                 }
+            }
+
+            /**
+             * COMMENT ROUTES (FIXED)
+             */
+            route("/comments") {
+
+                get("/post/{postId}") {
+                    commentService.getByPost(call)
+                }
+
+                post {
+                    commentService.post(call)
+                }
+
+                put("/{id}") {
+                    commentService.put(call)
+                }
+
+                delete("/{id}") {
+                    commentService.delete(call)
+                }
+            }
+
+            /**
+             * LIKE ROUTES (FIXED & CLEAN)
+             */
+            route("/posts/{postId}/likes") {
+
+                post {
+                    likeService.toggle(call) // toggle like
+                }
+
+                get {
+                    likeService.getLikes(call) // count like
+                }
+            }
+        }
+
+        /**
+         * IMAGE ROUTES
+         */
+        route("/images") {
+
+            get("/users/{id}") {
+                userService.getPhoto(call)
+            }
+
+            get("/posts/{id}") {
+                postService.getImage(call)
             }
         }
     }

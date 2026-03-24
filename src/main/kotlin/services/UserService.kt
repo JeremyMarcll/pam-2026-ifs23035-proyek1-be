@@ -3,6 +3,10 @@ package org.delcom.services
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.*
 import io.ktor.server.application.*
+import io.ktor.server.auth.UnauthorizedResponse
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.principal
+import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.util.cio.*
@@ -21,6 +25,7 @@ import org.delcom.repositories.IRefreshTokenRepository
 import org.delcom.repositories.IUserRepository
 import java.io.File
 import java.util.*
+
 
 class UserService(
     private val userRepo: IUserRepository,
@@ -216,4 +221,5 @@ class UserService(
 
         call.respondFile(file)
     }
+
 }

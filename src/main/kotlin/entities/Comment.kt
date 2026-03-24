@@ -7,17 +7,12 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
-data class Post(
+data class Comment(
     var id: String = UUID.randomUUID().toString(),
+    var postId: String,
     var userId: String,
-    var title: String,
-    var description: String,
-    var imageUrl: String? = null,
-    var kategori: String,
+    var content: String,
 
     @Contextual
-    val createdAt: Instant = Clock.System.now(),
-
-    @Contextual
-    var updatedAt: Instant = Clock.System.now()
+    val createdAt: Instant = Clock.System.now()
 )

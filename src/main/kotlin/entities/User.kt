@@ -8,7 +8,7 @@ import java.util.UUID
 
 @Serializable
 data class User(
-    var id: String = UUID.randomUUID().toString(),
+    var id : String = UUID.randomUUID().toString(),
     var name: String,
     var username: String,
     var password: String,
@@ -17,7 +17,6 @@ data class User(
 
     @Contextual
     val createdAt: Instant = Clock.System.now(),
-
     @Contextual
-    var updatedAt: Instant = Clock.System.now()
+    var updatedAt: Instant = Clock.System.now(),
 )

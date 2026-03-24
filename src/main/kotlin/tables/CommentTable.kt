@@ -21,5 +21,4 @@ object CommentTable : UUIDTable("comments") {
     val content = text("content")
 
     val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
 }

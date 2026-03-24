@@ -1,6 +1,5 @@
 package org.delcom.helpers
 
-
 import org.delcom.data.AppException
 import java.util.regex.Pattern
 

@@ -1,6 +1,7 @@
 package org.delcom.repositories
 
 import org.delcom.entities.User
+import org.delcom.entities.Post
 
 interface  IUserRepository {
     suspend fun getById(userId: String): User?

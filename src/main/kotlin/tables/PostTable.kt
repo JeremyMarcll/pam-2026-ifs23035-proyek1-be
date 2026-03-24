@@ -16,8 +16,11 @@ object PostTable : UUIDTable("posts") {
 
     val description = text("description")
 
+    val kategori = varchar ("kategori", 100)
+
     val image = text("image").nullable()
 
     val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
+
+    val updatedAt = timestamp("updated_at").nullable()
 }
