@@ -55,7 +55,7 @@ fun Application.configureRouting() {
     routing {
 
         get("/") {
-            call.respondText("Dibuat oleh Bunga Rhiza Sitorus | Delcom Post")
+            call.respondText("Dibuat oleh Jeremy Manullang")
         }
 
         /**
